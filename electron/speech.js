@@ -1,5 +1,4 @@
 import { app, ipcMain } from 'electron';
-import fs from 'fs';
 import path from 'path';
 
 // Local speech models via @huggingface/transformers (ONNX), fully offline
@@ -37,11 +36,10 @@ const ttsPromises = new Map();
 async function loadTransformers() {
 	if (!transformersPromise) {
 		transformersPromise = import('@huggingface/transformers').then((mod) => {
-			const modelCache = path.join(app.getPath('userData'), 'models');
-			mod.env.cacheDir = modelCache;
-			if (fs.existsSync(modelCache) && fs.readdirSync(modelCache).length > 0) {
-				mod.env.allowRemoteModels = false;
-			}
+			// Cache models under userData; transformers.js checks the cache first
+			// and only fetches files that are missing, so a not-yet-downloaded
+			// model (e.g. a TTS language) can still download while others stay local.
+			mod.env.cacheDir = path.join(app.getPath('userData'), 'models');
 			return mod;
 		});
 	}

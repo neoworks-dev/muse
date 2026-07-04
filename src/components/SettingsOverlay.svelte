@@ -5,7 +5,7 @@
 	import GearIcon from 'phosphor-svelte/lib/GearIcon';
 	import SunIcon from 'phosphor-svelte/lib/SunIcon';
 	import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
-	import { loadSettings, saveSettings, type AiProvider, type SearchProvider, type AppSettings } from '$lib/settings';
+	import { loadSettings, saveSettings, type AiProvider, type SearchProvider, type VoiceLanguage, type AppSettings } from '$lib/settings';
 	import { theme, toggleTheme } from '$lib/theme.svelte';
 	import { FloatingScrollbar } from '@neoworks-dev/ui';
 	import ModelPicker from './ModelPicker.svelte';
@@ -24,6 +24,22 @@
 		{ id: 'tavily',  label: 'Tavily',   note: 'Free tier, API key required' },
 		{ id: 'searxng', label: 'SearXNG',  note: 'Self-hosted' },
 		{ id: 'none',    label: 'Disabled', note: '' },
+	];
+
+	const VOICE_LANGUAGES: { id: VoiceLanguage; label: string }[] = [
+		{ id: 'auto', label: 'Auto-detect' },
+		{ id: 'eng',  label: 'English' },
+		{ id: 'deu',  label: 'German' },
+		{ id: 'fra',  label: 'French' },
+		{ id: 'spa',  label: 'Spanish' },
+		{ id: 'ita',  label: 'Italian' },
+		{ id: 'por',  label: 'Portuguese' },
+		{ id: 'nld',  label: 'Dutch' },
+		{ id: 'rus',  label: 'Russian' },
+		{ id: 'pol',  label: 'Polish' },
+		{ id: 'tur',  label: 'Turkish' },
+		{ id: 'kor',  label: 'Korean' },
+		{ id: 'vie',  label: 'Vietnamese' },
 	];
 
 	let settings: AppSettings = $state(loadSettings());
@@ -193,6 +209,24 @@
 									class="mt-2 w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-sm text-base-content placeholder-base-content/30 outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
 								/>
 							{/if}
+						</div>
+
+						<!-- Voice language -->
+						<div class="mt-4">
+							<label class="text-sm text-base-content/70" for="voice-language">Voice language</label>
+							<select
+								id="voice-language"
+								bind:value={settings.voiceLanguage}
+								class="mt-2 w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-sm text-base-content outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
+							>
+								{#each VOICE_LANGUAGES as lang}
+									<option value={lang.id}>{lang.label}</option>
+								{/each}
+							</select>
+							<p class="mt-1.5 text-xs text-base-content/40">
+								Spoken language for text-to-speech. Pick a fixed language if auto-detect
+								mispronounces short replies.
+							</p>
 						</div>
 
 						<!-- Vim mode -->

@@ -1,6 +1,23 @@
 export type AiProvider = 'claude-code' | 'codex' | 'opencode';
 export type SearchProvider = 'jina' | 'brave' | 'tavily' | 'searxng' | 'none';
 
+// 'auto' detects per message; the rest pin a specific MMS TTS model
+// (ISO 639-3 codes matching TTS_MODELS in electron/speech.js).
+export type VoiceLanguage =
+	| 'auto'
+	| 'eng'
+	| 'deu'
+	| 'fra'
+	| 'spa'
+	| 'ita'
+	| 'por'
+	| 'nld'
+	| 'rus'
+	| 'pol'
+	| 'tur'
+	| 'kor'
+	| 'vie';
+
 export interface AppSettings {
 	aiProvider: AiProvider;
 	model: string;
@@ -9,6 +26,8 @@ export interface AppSettings {
 	/** DALL-E model used for sketch-to-image generation. */
 	imageModel: string;
 	vimMode: boolean;
+	/** Language for local text-to-speech; 'auto' detects per message. */
+	voiceLanguage: VoiceLanguage;
 	searchProvider: SearchProvider;
 	/** API key for Brave or Tavily search. */
 	searchApiKey: string;
@@ -26,6 +45,7 @@ const DEFAULTS: AppSettings = {
 	openaiApiKey: '',
 	imageModel: 'gpt-image-1',
 	vimMode: false,
+	voiceLanguage: 'auto',
 	searchProvider: 'jina',
 	searchApiKey: '',
 	searxngUrl: '',

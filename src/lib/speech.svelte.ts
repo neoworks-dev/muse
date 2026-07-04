@@ -1,4 +1,5 @@
-import { detect } from 'tinyld';
+import { detectAll } from 'tinyld';
+import { loadSettings } from './settings';
 
 // Renderer side of local voice: mic capture + resampling for Whisper, and
 // playback of MMS TTS output. Heavy lifting (ONNX) happens in the Electron
@@ -115,9 +116,23 @@ export function stopSpeaking(): void {
 	speechState.speakingMsgId = null;
 }
 
+// tinyld is unreliable on short text (it returns an arbitrary language or
+// nothing), which sends English to a foreign MMS model and garbles every word.
+// English scores low even when correct, while other languages score high when
+// present — so default to English and only switch away on a strong, confident
+// non-English signal. A pinned voiceLanguage skips detection entirely.
+const MIN_DETECT_CHARS = 24;
+const MIN_DETECT_ACCURACY = 0.6;
+
 function detectTtsLanguage(text: string): string {
-	const iso1 = detect(text.slice(0, 500));
-	return TTS_LANGUAGES[iso1] ?? 'eng';
+	const pinned = loadSettings().voiceLanguage;
+	if (pinned !== 'auto') return pinned;
+	if (text.length < MIN_DETECT_CHARS) return 'eng';
+
+	const [best] = detectAll(text.slice(0, 500));
+	if (!best || best.lang === 'en') return 'eng';
+	if (best.accuracy < MIN_DETECT_ACCURACY) return 'eng';
+	return TTS_LANGUAGES[best.lang] ?? 'eng';
 }
 
 function stripForSpeech(markdown: string): string {
