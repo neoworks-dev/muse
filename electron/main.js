@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, protocol, net } from 'electron';
 import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import fs from 'fs';
+import { registerAiCliBridge } from './ai-cli.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = path.join(__dirname, '../build');
@@ -29,7 +30,8 @@ function createWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			webviewTag: true,
-			webSecurity: false
+			webSecurity: false,
+			preload: path.join(__dirname, 'preload.cjs')
 		}
 	});
 
@@ -41,7 +43,7 @@ function createWindow() {
 	});
 
 	if (DEV) {
-		const devUrl = process.env.MUSE_DEV_SERVER ?? 'http://localhost:5174';
+		const devUrl = process.env.MUSE_DEV_SERVER ?? 'http://localhost:5173';
 		loadWithRetry(win, devUrl);
 		win.webContents.openDevTools();
 	} else {
@@ -56,6 +58,8 @@ function loadWithRetry(win, url, attempt = 0) {
 }
 
 app.whenReady().then(() => {
+	registerAiCliBridge();
+
 	protocol.handle('app', (request) => {
 		const { pathname } = new URL(request.url);
 		const filePath = path.join(BUILD_DIR, pathname);

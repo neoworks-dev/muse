@@ -10,15 +10,11 @@
 	let {
 		value = $bindable(''),
 		provider,
-		apiKey,
-		customBaseUrl = '',
 		placeholder = 'Default model',
 		class: cls = ''
 	}: {
 		value?: string;
 		provider: AiProvider;
-		apiKey: string;
-		customBaseUrl?: string;
 		placeholder?: string;
 		class?: string;
 	} = $props();
@@ -33,18 +29,18 @@
 	let searchEl: HTMLInputElement | undefined = $state();
 
 	$effect(() => {
-		provider; apiKey; customBaseUrl;
+		provider;
 		fetched = false;
 		models = [];
 		fetchError = '';
 	});
 
 	async function load() {
-		if (fetched || !apiKey || loading) return;
+		if (fetched || loading) return;
 		loading = true;
 		fetchError = '';
 		try {
-			models = await fetchModels(provider, apiKey, customBaseUrl);
+			models = await fetchModels(provider);
 			fetched = true;
 		} catch (e) {
 			fetchError = e instanceof Error ? e.message : String(e);
@@ -146,9 +142,7 @@
 
 			<!-- List -->
 			<div class="flex-1 overflow-y-auto">
-				{#if !apiKey}
-					<p class="px-3 py-4 text-center text-[13px] text-base-content/30">Enter an API key to load models</p>
-				{:else if loading && models.length === 0}
+				{#if loading && models.length === 0}
 					<p class="px-3 py-4 text-center text-[13px] text-base-content/30">Loading models…</p>
 				{:else if fetchError}
 					<p class="px-3 py-2 text-[13px] text-error/70">{fetchError}</p>

@@ -1,12 +1,10 @@
-export type AiProvider = 'anthropic' | 'openai' | 'google' | 'custom';
+export type AiProvider = 'claude-code' | 'codex' | 'opencode';
 export type SearchProvider = 'jina' | 'brave' | 'tavily' | 'searxng' | 'none';
 
 export interface AppSettings {
 	aiProvider: AiProvider;
-	apiKey: string;
 	model: string;
-	customBaseUrl: string;
-	/** OpenAI key used for DALL-E image generation when the main provider is not OpenAI. */
+	/** OpenAI key used for DALL-E image generation. */
 	openaiApiKey: string;
 	/** DALL-E model used for sketch-to-image generation. */
 	imageModel: string;
@@ -20,11 +18,11 @@ export interface AppSettings {
 
 const KEY = 'muse:settings';
 
+const PROVIDERS: AiProvider[] = ['claude-code', 'codex', 'opencode'];
+
 const DEFAULTS: AppSettings = {
-	aiProvider: 'anthropic',
-	apiKey: '',
+	aiProvider: 'claude-code',
 	model: '',
-	customBaseUrl: '',
 	openaiApiKey: '',
 	imageModel: 'gpt-image-1',
 	vimMode: false,
@@ -36,7 +34,16 @@ const DEFAULTS: AppSettings = {
 export function loadSettings(): AppSettings {
 	try {
 		const raw = localStorage.getItem(KEY);
-		if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+		if (raw) {
+			const settings = { ...DEFAULTS, ...JSON.parse(raw) };
+			// Settings saved before the CLI-provider migration may hold an old
+			// HTTP provider id (anthropic/openai/...) or an API-model id.
+			if (!PROVIDERS.includes(settings.aiProvider)) {
+				settings.aiProvider = DEFAULTS.aiProvider;
+				settings.model = '';
+			}
+			return settings;
+		}
 	} catch {}
 	return { ...DEFAULTS };
 }

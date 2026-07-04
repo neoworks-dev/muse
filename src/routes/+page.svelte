@@ -22,8 +22,6 @@
 	import * as actions from '$lib/actions.svelte';
 	import { hydrate, flushNow, scheduleSync } from '$lib/sync.svelte';
 	import { loadProjects } from '$lib/projects.svelte';
-	import { ensureMuseDatabase } from '$lib/provision';
-	import { migrateLocalData } from '$lib/migrate';
 	import { uploadImage, mediaSentinel } from '$lib/media';
 	import { CanvasRenderer } from '$lib/canvas/core/CanvasRenderer';
 	import { MultiSelectTool } from '$lib/canvas/tools/MultiSelectTool';
@@ -161,8 +159,6 @@
 					}
 				] satisfies ContextMenuItem[];
 
-			await ensureMuseDatabase();
-			await migrateLocalData();
 			await loadProjects();
 			await hydrate();
 			pushHistory(); // seed base snapshot so first action is always undoable
@@ -449,8 +445,7 @@
 				}
 				case 'generate_image': {
 					const settings = loadSettings();
-					const openaiKey =
-						settings.aiProvider === 'openai' ? settings.apiKey : settings.openaiApiKey;
+					const openaiKey = settings.openaiApiKey;
 					if (!openaiKey) {
 						console.error('Image generation requires an OpenAI API key — add it in Settings.');
 						break;
@@ -501,7 +496,7 @@
 		for (const file of mediaFiles) {
 			const world = renderer.screenToWorld(dropScreenX, dropScreenY);
 
-			// Images are encrypted and stored in the backend; rendered via a manifest.
+			// Images are stored as blobs in IndexedDB; rendered via a manifest.
 			if (file.type.startsWith('image/') && file.type !== 'image/gif') {
 				try {
 					const manifest = await uploadImage(file, file.name || 'image', file.type);

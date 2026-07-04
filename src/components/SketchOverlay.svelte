@@ -259,11 +259,6 @@
 
 	async function submit() {
 		if (submitting || strokes.length === 0) return;
-		const settings = loadSettings();
-		if (!settings.apiKey) {
-			showError('No API key configured — open Settings (top right).');
-			return;
-		}
 
 		submitting = true;
 		submitError = '';
@@ -309,8 +304,6 @@
 			submittedElements = elements;
 
 			const result = await analyzeSketch({
-				apiKey: settings.apiKey,
-				model: settings.model || 'claude-sonnet-4-6',
 				canvasImage: canvasImg,
 				sketchImage: sketchImg,
 				elements,
@@ -353,8 +346,7 @@
 		const bounds = sketchWorldBounds;
 		if (generating || !bounds) return;
 		const settings = loadSettings();
-		if (!settings.apiKey) { showError('No API key — open Settings.'); return; }
-		if (settings.aiProvider !== 'openai' && !settings.openaiApiKey) {
+		if (!settings.openaiApiKey) {
 			showError('OpenAI API key required for image generation — add it in Settings.');
 			return;
 		}
@@ -376,10 +368,7 @@
 			const sketchImg = tmp.toDataURL('image/png');
 
 			const data = await generateFromSketch({
-				provider: settings.aiProvider,
-				apiKey: settings.apiKey,
-				openaiKey: settings.aiProvider === 'openai' ? settings.apiKey : settings.openaiApiKey,
-				model: settings.model || 'claude-sonnet-4-6',
+				openaiKey: settings.openaiApiKey,
 				imageModel: settings.imageModel || 'dall-e-3',
 				canvasImage: canvasImg,
 				sketchImage: sketchImg,

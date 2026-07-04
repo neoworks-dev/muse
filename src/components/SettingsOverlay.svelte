@@ -3,25 +3,19 @@
 	import XIcon from 'phosphor-svelte/lib/XIcon';
 	import KeyIcon from 'phosphor-svelte/lib/KeyIcon';
 	import GearIcon from 'phosphor-svelte/lib/GearIcon';
-	import LinkSimpleIcon from 'phosphor-svelte/lib/LinkSimpleIcon';
 	import SunIcon from 'phosphor-svelte/lib/SunIcon';
 	import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
 	import { loadSettings, saveSettings, type AiProvider, type SearchProvider, type AppSettings } from '$lib/settings';
 	import { theme, toggleTheme } from '$lib/theme.svelte';
-	import { auth, login, logout } from '$lib/auth.svelte';
 	import { FloatingScrollbar } from '@neoworks-dev/ui';
 	import ModelPicker from './ModelPicker.svelte';
 
 	let { onClose }: { onClose: () => void } = $props();
 
-	const userEmail = $derived(auth.user?.email ?? '');
-	const userInitial = $derived(userEmail ? userEmail[0].toUpperCase() : '?');
-
-	const PROVIDERS: { id: AiProvider; label: string; placeholder: string; defaultModel: string }[] = [
-		{ id: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-…', defaultModel: 'claude-sonnet-4-6' },
-		{ id: 'openai',    label: 'OpenAI',    placeholder: 'sk-…',     defaultModel: 'gpt-4o' },
-		{ id: 'google',    label: 'Google',    placeholder: 'AIza…',    defaultModel: 'gemini-2.0-flash' },
-		{ id: 'custom',    label: 'Custom',    placeholder: 'API key',  defaultModel: '' },
+	const PROVIDERS: { id: AiProvider; label: string; cli: string }[] = [
+		{ id: 'claude-code', label: 'Claude Code', cli: 'claude' },
+		{ id: 'codex',       label: 'Codex',       cli: 'codex' },
+		{ id: 'opencode',    label: 'opencode',    cli: 'opencode' },
 	];
 
 	const SEARCH_PROVIDERS: { id: SearchProvider; label: string; note: string }[] = [
@@ -33,7 +27,6 @@
 	];
 
 	let settings: AppSettings = $state(loadSettings());
-	let showKey = $state(false);
 	let saved = $state(false);
 	let open = $state(true);
 
@@ -44,9 +37,8 @@
 	const searchNote = $derived(SEARCH_PROVIDERS.find((p) => p.id === settings.searchProvider)?.note ?? '');
 
 	function selectProvider(id: AiProvider) {
-		const p = PROVIDERS.find((p) => p.id === id)!;
 		settings.aiProvider = id;
-		if (!settings.model) settings.model = p.defaultModel;
+		settings.model = '';
 	}
 
 	function commit() {
@@ -106,33 +98,6 @@
 						</div>
 					</section>
 
-					<!-- Profile -->
-					<section>
-						<p class="mb-3 text-xs font-semibold uppercase tracking-widest text-base-content/40">Profile</p>
-						<div class="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
-							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-xs font-bold text-white select-none">
-								{userInitial}
-							</div>
-							{#if auth.authenticated && auth.user}
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-sm text-base-content">{userEmail || 'Signed in'}</p>
-									<p class="text-xs text-base-content/40">Signed in</p>
-								</div>
-								<button class="btn btn-ghost btn-sm text-base-content/50" onclick={logout}>
-									Sign out
-								</button>
-							{:else}
-								<div class="min-w-0 flex-1">
-									<p class="text-sm text-base-content">Not signed in</p>
-									<p class="text-xs text-base-content/40">Sign in to sync and encrypt</p>
-								</div>
-								<button class="btn btn-sm btn-primary" onclick={login}>
-									Sign in
-								</button>
-							{/if}
-						</div>
-					</section>
-
 					<!-- AI Provider -->
 					<section>
 						<p class="mb-3 text-xs font-semibold uppercase tracking-widest text-base-content/40">AI Provider</p>
@@ -152,29 +117,10 @@
 							{/each}
 						</div>
 
-						<!-- API Key -->
-						<label class="mb-3 block">
-							<span class="mb-1.5 flex items-center gap-1.5 text-xs text-base-content/50">
-								<KeyIcon size={12} weight="bold" /> API Key
-							</span>
-							<div class="flex items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/20">
-								<input
-									type={showKey ? 'text' : 'password'}
-									bind:value={settings.apiKey}
-									placeholder={PROVIDERS.find((p) => p.id === settings.aiProvider)?.placeholder ?? ''}
-									spellcheck="false"
-									autocomplete="off"
-									class="flex-1 bg-transparent text-sm text-base-content placeholder-base-content/30 outline-none"
-								/>
-								<button
-									type="button"
-									class="shrink-0 text-xs text-base-content/40 hover:text-base-content transition"
-									onclick={() => (showKey = !showKey)}
-								>
-									{showKey ? 'Hide' : 'Show'}
-								</button>
-							</div>
-						</label>
+						<p class="mb-3 rounded-xl bg-base-200 px-4 py-3 text-xs leading-relaxed text-base-content/60">
+							Uses the local <code class="font-mono">{PROVIDERS.find((p) => p.id === settings.aiProvider)?.cli}</code> CLI
+							and its login — no API key needed. Make sure it is installed and you are signed in.
+						</p>
 
 						<!-- Model -->
 						<div class="mb-3">
@@ -182,44 +128,24 @@
 							<ModelPicker
 								bind:value={settings.model}
 								provider={settings.aiProvider}
-								apiKey={settings.apiKey}
-								customBaseUrl={settings.customBaseUrl}
-								placeholder={PROVIDERS.find((p) => p.id === settings.aiProvider)?.defaultModel ?? 'Default model'}
+								placeholder="CLI default model"
 							/>
 						</div>
 
-						<!-- Custom base URL -->
-						{#if settings.aiProvider === 'custom'}
-							<label class="block">
-								<span class="mb-1.5 flex items-center gap-1.5 text-xs text-base-content/50">
-									<LinkSimpleIcon size={12} weight="bold" /> Base URL
-								</span>
-								<input
-									type="url"
-									bind:value={settings.customBaseUrl}
-									placeholder="https://your-endpoint/v1"
-									spellcheck="false"
-									class="w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-sm text-base-content placeholder-base-content/30 outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
-								/>
-							</label>
-						{/if}
-
 						<!-- OpenAI key for DALL-E -->
-						{#if settings.aiProvider !== 'openai'}
-							<label class="mt-3 block">
-								<span class="mb-1.5 flex items-center gap-1.5 text-xs text-base-content/50">
-									<KeyIcon size={12} weight="bold" /> OpenAI Key <span class="text-base-content/30">(for image generation)</span>
-								</span>
-								<input
-									type="password"
-									bind:value={settings.openaiApiKey}
-									placeholder="sk-…"
-									spellcheck="false"
-									autocomplete="off"
-									class="w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-sm text-base-content placeholder-base-content/30 outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
-								/>
-							</label>
-						{/if}
+						<label class="mt-3 block">
+							<span class="mb-1.5 flex items-center gap-1.5 text-xs text-base-content/50">
+								<KeyIcon size={12} weight="bold" /> OpenAI Key <span class="text-base-content/30">(for image generation)</span>
+							</span>
+							<input
+								type="password"
+								bind:value={settings.openaiApiKey}
+								placeholder="sk-…"
+								spellcheck="false"
+								autocomplete="off"
+								class="w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-sm text-base-content placeholder-base-content/30 outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
+							/>
+						</label>
 
 						<!-- Image generation model -->
 						<label class="mt-3 block">

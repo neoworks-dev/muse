@@ -1486,8 +1486,6 @@ ${docText}`;
 								<ModelPicker
 									bind:value={modelOverride}
 									provider={currentSettings.aiProvider}
-									apiKey={currentSettings.apiKey}
-									customBaseUrl={currentSettings.customBaseUrl}
 									placeholder={defaultModel}
 								/>
 							{/if}
