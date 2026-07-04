@@ -642,13 +642,13 @@
 								<div class="flex shrink-0 items-center gap-1">
 									{#if isCapturing}
 										<span
-											class="border-primary/40 bg-primary/10 text-primary animate-pulse rounded border px-1.5 py-0.5 text-[13px]"
+											class="border-primary/40 bg-primary/10 text-primary flex h-5 animate-pulse items-center rounded border px-1.5 text-[13px]"
 										>
 											press key…
 										</span>
 									{:else if hk}
 										<button
-											class="border-base-200 text-base-content/40 hover:border-primary/40 hover:text-primary rounded border px-1.5 py-0.5 text-[13px] transition-colors"
+											class="border-base-200 text-base-content/40 hover:border-primary/40 hover:text-primary flex h-5 items-center rounded border px-1.5 text-[13px] transition-colors"
 											onclick={(e) => startCapture(item.id, e)}
 											title="Click to change hotkey"
 										>
@@ -663,7 +663,7 @@
 										</button>
 									{:else}
 										<button
-											class="border-base-200 text-base-content/20 hover:border-primary/40 hover:text-primary hidden rounded border border-dashed px-1.5 py-0.5 text-[13px] transition-colors group-hover/row:block"
+											class="border-base-200 text-base-content/20 hover:border-primary/40 hover:text-primary hidden h-5 items-center rounded border border-dashed px-1.5 text-[13px] transition-colors group-hover/row:flex"
 											onclick={(e) => startCapture(item.id, e)}
 											title="Assign hotkey"
 										>
