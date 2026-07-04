@@ -31,6 +31,7 @@
 			"electron/**/*"
 		],
 		"asarUnpack": [
+			"electron/mcp-canvas.js",
 			"node_modules/onnxruntime-node/**",
 			"node_modules/sharp/**",
 			"node_modules/@img/**"

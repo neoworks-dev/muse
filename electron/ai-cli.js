@@ -3,6 +3,10 @@ import { ipcMain } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { getBridgeInfo } from './canvas-bridge.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Streams AI completions through local coding-agent CLIs (Claude Code, Codex,
 // opencode) instead of provider HTTP APIs, so requests bill against the user's
@@ -72,6 +76,27 @@ function writeTempImages(images) {
 // parseLine(line, emit) turns one stdout line into text chunks. A null
 // parseLine means stdout is plain text and is forwarded as-is.
 
+// MCP config exposing canvas search to the claude CLI. Runs the bundled
+// mcp-canvas.js with Electron's binary in Node mode so no separate Node
+// install is needed.
+function canvasMcpConfig() {
+	const bridge = getBridgeInfo();
+	if (!bridge) return null;
+	return JSON.stringify({
+		mcpServers: {
+			muse: {
+				command: process.execPath,
+				args: [path.join(__dirname, 'mcp-canvas.js')],
+				env: {
+					ELECTRON_RUN_AS_NODE: '1',
+					MUSE_BRIDGE_URL: `http://127.0.0.1:${bridge.port}`,
+					MUSE_BRIDGE_TOKEN: bridge.token
+				}
+			}
+		}
+	});
+}
+
 function claudeEngine({ system, model, messages }) {
 	const { text, images } = flattenMessages(messages);
 	const args = [
@@ -86,6 +111,15 @@ function claudeEngine({ system, model, messages }) {
 		// CLI then reports "Not logged in".
 		'--exclude-dynamic-system-prompt-sections'
 	];
+	const mcpConfig = canvasMcpConfig();
+	if (mcpConfig) {
+		args.push(
+			'--mcp-config', mcpConfig,
+			// Auto-allow only our canvas tools; headless mode denies everything else.
+			'--allowedTools', 'mcp__muse',
+			'--max-turns', '8'
+		);
+	}
 	if (system) args.push('--system-prompt', system);
 	if (model) args.push('--model', model);
 

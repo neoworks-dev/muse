@@ -20,6 +20,7 @@
 
 	import { canvas, ui, pushHistory } from '$lib/state.svelte';
 	import { startEmbeddingIndexer } from '$lib/embeddings.svelte';
+	import { startCanvasBridge } from '$lib/canvas-bridge';
 	import * as actions from '$lib/actions.svelte';
 	import { hydrate, flushNow, scheduleSync } from '$lib/sync.svelte';
 	import { loadProjects } from '$lib/projects.svelte';
@@ -60,6 +61,9 @@
 
 	// Keeps the Nomic embedding index in sync with canvas content.
 	startEmbeddingIndexer();
+
+	// Answers MCP tool calls (canvas search) from AI CLI subprocesses.
+	startCanvasBridge();
 
 	// AI-titles untitled documents in the background after the editor closes.
 	async function maybeGenerateDocumentTitle(docId: string, content: string) {

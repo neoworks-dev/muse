@@ -19,6 +19,21 @@ contextBridge.exposeInMainWorld('aiCli', {
 	}
 });
 
+contextBridge.exposeInMainWorld('canvasBridge', {
+	// Renderer registers one handler; main forwards MCP tool calls through it.
+	onRequest(handler) {
+		ipcRenderer.on('canvas-bridge:request', async (_event, { requestId, method, params }) => {
+			try {
+				const result = await handler(method, params);
+				ipcRenderer.send('canvas-bridge:response', { requestId, result });
+			} catch (e) {
+				const error = e instanceof Error ? e.message : String(e);
+				ipcRenderer.send('canvas-bridge:response', { requestId, error });
+			}
+		});
+	}
+});
+
 contextBridge.exposeInMainWorld('embeddings', {
 	embedText(texts, kind) {
 		return ipcRenderer.invoke('embeddings:text', texts, kind);

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { registerAiCliBridge } from './ai-cli.js';
 import { registerEmbeddingsBridge } from './embeddings.js';
+import { registerCanvasBridge } from './canvas-bridge.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = path.join(__dirname, '../build');
@@ -22,6 +23,8 @@ protocol.registerSchemesAsPrivileged([
 	{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ]);
 
+let mainWindow = null;
+
 function createWindow() {
 	const win = new BrowserWindow({
 		width: 1400,
@@ -35,6 +38,7 @@ function createWindow() {
 			preload: path.join(__dirname, 'preload.cjs')
 		}
 	});
+	mainWindow = win;
 
 	win.webContents.setWindowOpenHandler(({ url }) => {
 		if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -61,6 +65,7 @@ function loadWithRetry(win, url, attempt = 0) {
 app.whenReady().then(() => {
 	registerAiCliBridge();
 	registerEmbeddingsBridge();
+	registerCanvasBridge(() => mainWindow);
 
 	protocol.handle('app', (request) => {
 		const { pathname } = new URL(request.url);

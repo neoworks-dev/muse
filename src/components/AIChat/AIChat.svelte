@@ -511,9 +511,9 @@ Canvas action types:
 To search the web, include this tag (intercepted before display):
 <web-search>your search query</web-search>
 
-To search the user's canvas (documents, notes, bookmarks) semantically, include:
+To search the user's canvas (documents, notes, bookmarks): if you have the search_canvas / get_canvas_object tools, use them directly. Otherwise include this tag and the matching content is fed back to you for a second pass:
 <canvas-search>what you are looking for</canvas-search>
-The matching content (with object IDs) is fed back to you for a second pass. Use this whenever the user refers to their notes or documents and the content is not already in your context.
+Search the canvas whenever the user refers to their notes or documents and the content is not already in your context.
 
 After results arrive you will be asked to respond again. Cite results using:
 <sources>
