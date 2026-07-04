@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">muse</string>
-    <string name="title_activity_main">muse</string>
-    <string name="package_name">dev.neoworks.muse</string>
-    <string name="custom_url_scheme">dev.neoworks.muse</string>
-</resources>
