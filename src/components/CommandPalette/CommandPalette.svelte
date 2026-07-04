@@ -496,6 +496,7 @@
 	}
 
 	function onKeydown(e: KeyboardEvent) {
+		if (!open) return;
 		// Capture mode intercepts everything
 		if (capturingFor !== null) {
 			e.preventDefault();
@@ -591,7 +592,6 @@
 			<input
 				bind:this={inputEl}
 				bind:value={query}
-				onkeydown={onKeydown}
 				type="text"
 				placeholder={capturingFor ? 'Press a key combination…' : 'Search commands…'}
 				class="text-base-content placeholder:text-base-content/30 flex-1 bg-transparent text-sm outline-none {capturingFor
