@@ -1,92 +1,140 @@
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Local speech models via @huggingface/transformers (ONNX), fully offline
-// after the first download:
-//   - Whisper (multilingual, auto language detection) for speech-to-text
-//   - MMS VITS per-language models for text-to-speech
-//
-// Renderer protocol:
-//   invoke 'speech:transcribe' (pcm: ArrayBuffer of Float32 mono 16kHz) → string
-//   invoke 'speech:speak' (text: string, language?: string)
-//     → { audio: ArrayBuffer of Float32, sampleRate: number }
+// Proxy to the isolated speech engine, which runs in a hidden BrowserWindow
+// (src/routes/speech). A Chromium renderer is used instead of a Node child so
+// the models can run on the GPU via WebGPU (falling back to wasm). A crash there
+// only kills the hidden window; we respawn it and reject in-flight jobs.
 
-const WHISPER_MODEL = 'onnx-community/whisper-small';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PRELOAD_PATH = path.join(__dirname, 'speech-preload.cjs');
+const DEV = process.env.NODE_ENV === 'development';
 
-// MMS text-to-speech models by ISO 639-3 code.
-const TTS_MODELS = {
-	eng: 'Xenova/mms-tts-eng',
-	deu: 'Xenova/mms-tts-deu',
-	fra: 'Xenova/mms-tts-fra',
-	spa: 'Xenova/mms-tts-spa',
-	ita: 'Xenova/mms-tts-ita',
-	por: 'Xenova/mms-tts-por',
-	nld: 'Xenova/mms-tts-nld',
-	rus: 'Xenova/mms-tts-rus',
-	pol: 'Xenova/mms-tts-pol',
-	tur: 'Xenova/mms-tts-tur',
-	kor: 'Xenova/mms-tts-kor',
-	vie: 'Xenova/mms-tts-vie'
-};
+let workerWindow = null;
+let workerReady = false;
+let readyWaiters = [];
+let nextJobId = 1;
+const pendingJobs = new Map();
 
-let transformersPromise = null;
-let whisperPromise = null;
-const ttsPromises = new Map();
-
-async function loadTransformers() {
-	if (!transformersPromise) {
-		transformersPromise = import('@huggingface/transformers').then((mod) => {
-			// Cache models under userData; transformers.js checks the cache first
-			// and only fetches files that are missing, so a not-yet-downloaded
-			// model (e.g. a TTS language) can still download while others stay local.
-			mod.env.cacheDir = path.join(app.getPath('userData'), 'models');
-			return mod;
-		});
+function workerUrl() {
+	if (DEV) {
+		const base = process.env.MUSE_DEV_SERVER ?? 'http://localhost:5173';
+		return `${base}/speech`;
 	}
-	return transformersPromise;
+	return 'app://muse/speech';
 }
 
-async function whisperPipeline() {
-	if (!whisperPromise) {
-		whisperPromise = loadTransformers().then((mod) =>
-			mod.pipeline('automatic-speech-recognition', WHISPER_MODEL, { dtype: 'q8', device: 'cpu' })
-		);
+function whenReady() {
+	if (workerReady) return Promise.resolve();
+	return new Promise((resolve, reject) => readyWaiters.push({ resolve, reject }));
+}
+
+function resolveReadyWaiters() {
+	workerReady = true;
+	for (const { resolve } of readyWaiters) resolve();
+	readyWaiters = [];
+}
+
+function rejectPending(reason) {
+	const error = new Error(reason);
+	for (const { reject } of pendingJobs.values()) reject(error);
+	pendingJobs.clear();
+	for (const { reject } of readyWaiters) reject(error);
+	readyWaiters = [];
+}
+
+function handleWorkerLost(reason) {
+	console.error('[speech]', reason);
+	workerReady = false;
+	workerWindow = null;
+	rejectPending('Speech engine crashed');
+}
+
+function loadWorker(win, attempt = 0) {
+	win.loadURL(workerUrl()).catch(() => {
+		if (attempt < 30) setTimeout(() => loadWorker(win, attempt + 1), 500);
+	});
+}
+
+function createWorkerWindow() {
+	const win = new BrowserWindow({
+		show: false,
+		webPreferences: {
+			preload: PRELOAD_PATH,
+			nodeIntegration: false,
+			contextIsolation: true,
+			webSecurity: false,
+			// Keep the GPU/wasm work running full speed even though the window is hidden.
+			backgroundThrottling: false
+		}
+	});
+
+	win.webContents.on('render-process-gone', (_event, details) => {
+		if (workerWindow !== win) return;
+		handleWorkerLost(`worker gone: ${details?.reason ?? 'unknown'}`);
+		if (!win.isDestroyed()) win.destroy();
+	});
+	win.on('closed', () => {
+		if (workerWindow === win) handleWorkerLost('worker window closed');
+	});
+
+	loadWorker(win);
+	return win;
+}
+
+function ensureWorker() {
+	if (!workerWindow) {
+		workerReady = false;
+		workerWindow = createWorkerWindow();
 	}
-	return whisperPromise;
+	return workerWindow;
 }
 
-async function ttsPipeline(language) {
-	const modelId = TTS_MODELS[language] ?? TTS_MODELS.eng;
-	if (!ttsPromises.has(modelId)) {
-		ttsPromises.set(
-			modelId,
-			loadTransformers().then((mod) => mod.pipeline('text-to-speech', modelId, { device: 'cpu' }))
-		);
+async function runJob(job) {
+	ensureWorker();
+	await whenReady();
+	const id = nextJobId++;
+	return new Promise((resolve, reject) => {
+		pendingJobs.set(id, { resolve, reject });
+		workerWindow.webContents.send('speech:job', { ...job, id });
+	});
+}
+
+function transcribe(pcmBuffer, language) {
+	return runJob({ kind: 'transcribe', pcm: pcmBuffer, language });
+}
+
+function speak(text, language) {
+	return runJob({ kind: 'speak', text, language });
+}
+
+function handleResult(message) {
+	const pending = pendingJobs.get(message.id);
+	if (!pending) return;
+	pendingJobs.delete(message.id);
+	if (message.ok) {
+		pending.resolve(message.result);
+	} else {
+		pending.reject(new Error(message.error));
 	}
-	return ttsPromises.get(modelId);
 }
 
-async function transcribe(pcmBuffer, language) {
-	const transcriber = await whisperPipeline();
-	const audio = new Float32Array(pcmBuffer);
-	// Whisper "auto-detect" in transformers.js falls back to English and then
-	// TRANSLATES foreign speech — always pin the language and force transcribe.
-	const options = { chunk_length_s: 30, stride_length_s: 5, task: 'transcribe' };
-	if (language) options.language = language;
-	const output = await transcriber(audio, options);
-	const text = Array.isArray(output) ? output.map((o) => o.text).join(' ') : output.text;
-	return (text ?? '').trim();
-}
-
-async function speak(text, language) {
-	const synthesizer = await ttsPipeline(language);
-	const output = await synthesizer(text);
-	// Copy into a plain ArrayBuffer so it survives structured clone.
-	const audio = new Float32Array(output.audio);
-	return { audio: audio.buffer, sampleRate: output.sampling_rate };
+// Called on main-window close so the hidden worker never keeps the app alive.
+export function shutdownSpeechBridge() {
+	rejectPending('Speech engine shut down');
+	if (workerWindow) {
+		const win = workerWindow;
+		workerWindow = null;
+		if (!win.isDestroyed()) win.destroy();
+	}
 }
 
 export function registerSpeechBridge() {
+	ipcMain.on('speech:ready', () => resolveReadyWaiters());
+	ipcMain.on('speech:result', (_event, message) => handleResult(message));
+	ipcMain.on('speech:log', (_event, message) => console.log('[speech]', message));
+
 	ipcMain.handle('speech:transcribe', (_event, pcmBuffer, language) =>
 		transcribe(pcmBuffer, language)
 	);

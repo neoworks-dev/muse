@@ -5,7 +5,7 @@ import fs from 'fs';
 import { registerAiCliBridge } from './ai-cli.js';
 import { registerEmbeddingsBridge } from './embeddings.js';
 import { registerCanvasBridge } from './canvas-bridge.js';
-import { registerSpeechBridge } from './speech.js';
+import { registerSpeechBridge, shutdownSpeechBridge } from './speech.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = path.join(__dirname, '../build');
@@ -14,6 +14,12 @@ const DEV = process.env.NODE_ENV === 'development';
 
 // Prefer native Wayland (Hyprland) over XWayland for crisp scaling + presentation.
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+
+// Enable WebGPU (Dawn/Vulkan) so the hidden speech worker can run ONNX on the
+// GPU. Without the Vulkan feature, navigator.gpu is unavailable on Linux and the
+// worker falls back to wasm (CPU).
+app.commandLine.appendSwitch('enable-unsafe-webgpu');
+app.commandLine.appendSwitch('enable-features', 'Vulkan');
 
 // Do NOT add `disable-frame-rate-limit` or `disable-gpu-vsync`: they uncap the
 // render loop to thousands of fps, flooding the GPU queue so Pixi's scene stalls
@@ -40,6 +46,12 @@ function createWindow() {
 		}
 	});
 	mainWindow = win;
+
+	// Tear down the speech worker with the window so it never keeps the app alive.
+	win.on('closed', () => {
+		shutdownSpeechBridge();
+		if (mainWindow === win) mainWindow = null;
+	});
 
 	win.webContents.setWindowOpenHandler(({ url }) => {
 		if (url.startsWith('http://') || url.startsWith('https://')) {
