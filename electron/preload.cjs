@@ -34,6 +34,15 @@ contextBridge.exposeInMainWorld('canvasBridge', {
 	}
 });
 
+contextBridge.exposeInMainWorld('speech', {
+	transcribe(pcmBuffer, language) {
+		return ipcRenderer.invoke('speech:transcribe', pcmBuffer, language);
+	},
+	speak(text, language) {
+		return ipcRenderer.invoke('speech:speak', text, language);
+	}
+});
+
 contextBridge.exposeInMainWorld('embeddings', {
 	embedText(texts, kind) {
 		return ipcRenderer.invoke('embeddings:text', texts, kind);

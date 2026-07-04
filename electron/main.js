@@ -5,6 +5,7 @@ import fs from 'fs';
 import { registerAiCliBridge } from './ai-cli.js';
 import { registerEmbeddingsBridge } from './embeddings.js';
 import { registerCanvasBridge } from './canvas-bridge.js';
+import { registerSpeechBridge } from './speech.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = path.join(__dirname, '../build');
@@ -66,6 +67,7 @@ app.whenReady().then(() => {
 	registerAiCliBridge();
 	registerEmbeddingsBridge();
 	registerCanvasBridge(() => mainWindow);
+	registerSpeechBridge();
 
 	protocol.handle('app', (request) => {
 		const { pathname } = new URL(request.url);

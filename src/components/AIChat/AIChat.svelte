@@ -3,6 +3,13 @@
 	import { marked } from 'marked';
 	import { streamCompletion } from '$lib/ai';
 	import { semanticContext, semanticSearch } from '$lib/embeddings.svelte';
+	import {
+		speechAvailable,
+		speechState,
+		startRecording,
+		stopRecording,
+		speakText
+	} from '$lib/speech.svelte';
 	import { loadSettings } from '$lib/settings';
 	import { webSearch } from '$lib/api/web-search';
 	import Dropdown from '../Dropdown.svelte';
@@ -20,6 +27,9 @@
 	import type { SketchAction } from '$lib/sketch-types';
 	import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon';
 	import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
+	import MicrophoneIcon from 'phosphor-svelte/lib/MicrophoneIcon';
+	import SpeakerHighIcon from 'phosphor-svelte/lib/SpeakerHighIcon';
+	import StopIcon from 'phosphor-svelte/lib/StopIcon';
 	import ArrowsOutIcon from 'phosphor-svelte/lib/ArrowsOutIcon';
 	import ArrowsInIcon from 'phosphor-svelte/lib/ArrowsInIcon';
 	import XIcon from 'phosphor-svelte/lib/XIcon';
@@ -789,6 +799,27 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		await _runCompletion(tid);
 	}
 
+	async function toggleRecording() {
+		if (speechState.recording) {
+			try {
+				const transcript = await stopRecording();
+				if (transcript) {
+					input = input ? `${input} ${transcript}` : transcript;
+					autoResizeTextarea();
+					textareaEl?.focus();
+				}
+			} catch (e) {
+				err = `Transcription failed: ${e instanceof Error ? e.message : String(e)}`;
+			}
+			return;
+		}
+		try {
+			await startRecording();
+		} catch (e) {
+			err = `Microphone unavailable: ${e instanceof Error ? e.message : String(e)}`;
+		}
+	}
+
 	async function send() {
 		const text = input.trim();
 		if (!text || loading) return;
@@ -1267,6 +1298,23 @@ ${docText}`;
 								>
 									<CopyIcon size={10} /> Copy
 								</button>
+								{#if speechAvailable()}
+									<button
+										class="btn btn-ghost btn-xs gap-1 {speechState.speakingMsgId === msg.id
+											? 'text-primary'
+											: 'text-base-content/30'}"
+										onclick={() => speakText(msg.id, msg.content)}
+										title={speechState.speakingMsgId === msg.id ? 'Stop' : 'Read aloud'}
+									>
+										{#if speechState.speakingMsgId === msg.id && speechState.synthesizing}
+											<CircleNotchIcon size={10} class="animate-spin" /> Preparing
+										{:else if speechState.speakingMsgId === msg.id}
+											<StopIcon size={10} weight="fill" /> Stop
+										{:else}
+											<SpeakerHighIcon size={10} /> Speak
+										{/if}
+									</button>
+								{/if}
 								{#if onProposedDoc}
 									<button
 										class="btn btn-ghost btn-xs text-base-content/30 gap-1"
@@ -1637,6 +1685,24 @@ ${docText}`;
 						</button>
 					{/if}
 
+					{#if speechAvailable()}
+						<button
+							onclick={toggleRecording}
+							disabled={speechState.transcribing}
+							class="btn btn-ghost btn-square btn-xs {speechState.recording
+								? 'text-error animate-pulse'
+								: 'text-base-content/40'}"
+							title={speechState.recording ? 'Stop and transcribe' : 'Dictate (Whisper)'}
+						>
+							{#if speechState.transcribing}
+								<CircleNotchIcon size={13} class="animate-spin" />
+							{:else if speechState.recording}
+								<StopIcon size={13} weight="fill" />
+							{:else}
+								<MicrophoneIcon size={13} />
+							{/if}
+						</button>
+					{/if}
 					{#if loading || applyLoading}
 						<button
 							onclick={stopStreaming}
