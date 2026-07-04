@@ -45,6 +45,7 @@
 	import { extractYoutubeId, getYoutubeStreamUrl } from '$lib/api/youtube';
 	import { generateImage } from '$lib/api/image-gen';
 	import { loadSettings } from '$lib/settings';
+	import { generateTitle } from '$lib/ai';
 	import {
 		NOTE_FONT_FAMILY,
 		NOTE_FONT_SIZE,
@@ -59,6 +60,24 @@
 
 	// Keeps the Nomic embedding index in sync with canvas content.
 	startEmbeddingIndexer();
+
+	// AI-titles untitled documents in the background after the editor closes.
+	async function maybeGenerateDocumentTitle(docId: string, content: string) {
+		const doc = canvas.objects.find((o) => o.id === docId);
+		if (!doc || doc.type !== 'document' || doc.title) return;
+		if (content.trim().split(/\s+/).length < 10) return;
+
+		try {
+			const title = await generateTitle(content);
+			if (!title) return;
+			const current = canvas.objects.find((o) => o.id === docId);
+			if (current && current.type === 'document' && !current.title) {
+				actions.updateObject(docId, { title });
+			}
+		} catch {
+			// Title stays empty — non-critical.
+		}
+	}
 
 	// Pegboard dot styling per theme (linear RGB 0..1).
 	const peg = $derived(
@@ -792,6 +811,7 @@
 			onCommit={(text) => {
 				actions.commitDocumentEdit(docId, text);
 				scheduleSync();
+				void maybeGenerateDocumentTitle(docId, text);
 			}}
 			onCancel={() => actions.cancelDocumentEdit(docId)}
 			onUpdate={(text) => {

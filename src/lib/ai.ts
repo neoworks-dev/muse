@@ -78,6 +78,20 @@ export async function* streamCompletion(
 	}
 }
 
+/** Generate a short document title from its content. */
+export async function generateTitle(content: string, signal?: AbortSignal): Promise<string> {
+	const system =
+		'Generate a short title (at most 6 words) for the given document. ' +
+		'Output ONLY the title text — no quotes, no trailing punctuation, no explanation.';
+	const raw = await completeText(
+		[{ role: 'user', content: content.slice(0, 4000) }],
+		system,
+		signal
+	);
+	const firstLine = raw.trim().split('\n')[0] ?? '';
+	return firstLine.replace(/^["'#\s]+|["'\s]+$/g, '').slice(0, 80);
+}
+
 /** Run a completion to the end and return the full text. */
 export async function completeText(
 	messages: ChatMessage[],
