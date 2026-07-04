@@ -2,7 +2,7 @@
 	import { tick, onMount } from 'svelte';
 	import { marked } from 'marked';
 	import { streamCompletion } from '$lib/ai';
-	import { semanticContext } from '$lib/embeddings.svelte';
+	import { semanticContext, semanticSearch } from '$lib/embeddings.svelte';
 	import { loadSettings } from '$lib/settings';
 	import { webSearch } from '$lib/api/web-search';
 	import Dropdown from '../Dropdown.svelte';
@@ -19,6 +19,7 @@
 	} from '$lib/ai-sync';
 	import type { SketchAction } from '$lib/sketch-types';
 	import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon';
+	import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
 	import ArrowsOutIcon from 'phosphor-svelte/lib/ArrowsOutIcon';
 	import ArrowsInIcon from 'phosphor-svelte/lib/ArrowsInIcon';
 	import XIcon from 'phosphor-svelte/lib/XIcon';
@@ -84,6 +85,15 @@
 		sources?: MsgSource[];
 		searchQuery?: string;
 		searchResults?: MsgSearchResult[];
+		canvasSearchQuery?: string;
+		canvasSearchResults?: CanvasSearchResult[];
+	};
+	type CanvasSearchResult = {
+		id: string;
+		type: string;
+		title: string;
+		excerpt: string;
+		score: number;
 	};
 	type Thread = {
 		id: string;
@@ -501,6 +511,10 @@ Canvas action types:
 To search the web, include this tag (intercepted before display):
 <web-search>your search query</web-search>
 
+To search the user's canvas (documents, notes, bookmarks) semantically, include:
+<canvas-search>what you are looking for</canvas-search>
+The matching content (with object IDs) is fed back to you for a second pass. Use this whenever the user refers to their notes or documents and the content is not already in your context.
+
 After results arrive you will be asked to respond again. Cite results using:
 <sources>
 [{"url":"https://...","title":"Page title","snippet":"brief description","autoOpen":false}]
@@ -512,7 +526,7 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		return sys;
 	}
 
-	const _SPECIAL_TAGS = ['remember', 'canvas-actions', 'web-search', 'sources'];
+	const _SPECIAL_TAGS = ['remember', 'canvas-actions', 'web-search', 'canvas-search', 'sources'];
 
 	function _filterStreaming(text: string): string {
 		let out = text;
@@ -539,11 +553,13 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		canvasActions: SketchAction[];
 		sources: MsgSource[];
 		webSearchQuery: string | null;
+		canvasSearchQuery: string | null;
 	} {
 		const newMemories: string[] = [];
 		const canvasActions: SketchAction[] = [];
 		const sources: MsgSource[] = [];
 		let webSearchQuery: string | null = null;
+		let canvasSearchQuery: string | null = null;
 
 		let clean = text.replace(/<remember>([\s\S]*?)<\/remember>/g, (_, c) => {
 			newMemories.push(c.trim());
@@ -563,6 +579,11 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 			return '';
 		});
 
+		clean = clean.replace(/<canvas-search>([\s\S]*?)<\/canvas-search>/g, (_, q) => {
+			canvasSearchQuery = q.trim();
+			return '';
+		});
+
 		clean = clean.replace(/<sources>([\s\S]*?)<\/sources>/g, (_, c) => {
 			try {
 				const parsed = JSON.parse(c.trim());
@@ -571,7 +592,7 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 			return '';
 		});
 
-		return { clean: clean.trim(), newMemories, canvasActions, sources, webSearchQuery };
+		return { clean: clean.trim(), newMemories, canvasActions, sources, webSearchQuery, canvasSearchQuery };
 	}
 
 	// ── Core completion ───────────────────────────────────────────────────
@@ -600,6 +621,14 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 						.map((r, j) => `[${j + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`)
 						.join('\n\n');
 					content += `\n\n[Web search results for "${m.searchQuery}":\n${block}\nAnswer using these results and include a <sources> tag.]`;
+				}
+				if (m.canvasSearchResults) {
+					const block = m.canvasSearchResults.length
+						? m.canvasSearchResults
+								.map((r) => `### ${r.type} id="${r.id}" — ${r.title} (relevance ${r.score.toFixed(2)})\n${r.excerpt}`)
+								.join('\n\n')
+						: '(no matching canvas content)';
+					content += `\n\n[Canvas search results for "${m.canvasSearchQuery}":\n${block}\nAnswer using this canvas content.]`;
 				}
 				return {
 					role: m.role,
@@ -632,7 +661,7 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		} finally {
 			_abortController = null;
 			if (partial) {
-				const { clean, newMemories, canvasActions, sources, webSearchQuery } =
+				const { clean, newMemories, canvasActions, sources, webSearchQuery, canvasSearchQuery } =
 					_parseResponse(partial);
 				for (const m of newMemories) addMemory(m);
 
@@ -641,6 +670,15 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 					streaming = '';
 					loading = false;
 					await _runWebSearch(tid, webSearchQuery);
+					return;
+				}
+
+				// Canvas search pass — semantic search over canvas content, then
+				// a second completion with the results attached
+				if (canvasSearchQuery && _canvasSearchCount < 3) {
+					streaming = '';
+					loading = false;
+					await _runCanvasSearch(tid, canvasSearchQuery);
 					return;
 				}
 
@@ -675,6 +713,55 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		}
 	}
 
+	// Bounded per send() so a model that keeps emitting <canvas-search> cannot loop forever.
+	let _canvasSearchCount = 0;
+
+	function _canvasSearchExcerpt(obj: ObjectData): string | null {
+		if (obj.type === 'document') return obj.content.slice(0, 4000);
+		if (obj.type === 'note') return obj.body.slice(0, 1000);
+		if (obj.type === 'bookmark') return [obj.description, obj.url].filter(Boolean).join('\n');
+		if (obj.type === 'folder') return '(folder)';
+		if (obj.type === 'media') return '(image on canvas)';
+		return null;
+	}
+
+	async function _runCanvasSearch(tid: string, query: string) {
+		_canvasSearchCount++;
+		loading = true;
+		let results: CanvasSearchResult[] = [];
+		try {
+			const hits = await semanticSearch(query, 6);
+			for (const hit of hits) {
+				const obj = canvasObjects.find((o) => o.id === hit.id);
+				if (!obj) continue;
+				const excerpt = _canvasSearchExcerpt(obj);
+				if (excerpt == null) continue;
+				const title =
+					'title' in obj && obj.title
+						? obj.title
+						: 'body' in obj
+							? obj.body.slice(0, 60)
+							: obj.type;
+				results.push({ id: obj.id, type: obj.type, title, excerpt, score: hit.score });
+			}
+		} catch (e) {
+			err = `Canvas search failed: ${e instanceof Error ? e.message : String(e)}`;
+		}
+
+		// Attach results to the last user message — no synthetic message added
+		threads = threads.map((t) => {
+			if (t.id !== tid) return t;
+			const msgs = [...t.messages];
+			const lastUserIdx = msgs.map((m) => m.role).lastIndexOf('user');
+			if (lastUserIdx >= 0) {
+				msgs[lastUserIdx] = { ...msgs[lastUserIdx], canvasSearchQuery: query, canvasSearchResults: results };
+			}
+			return { ...t, messages: msgs };
+		});
+
+		await _runCompletion(tid);
+	}
+
 	async function _runWebSearch(tid: string, query: string) {
 		_searching = true;
 		loading = true;
@@ -707,6 +794,7 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 		if (!text || loading) return;
 		input = '';
 		err = '';
+		_canvasSearchCount = 0;
 		autoResizeTextarea();
 
 		const docs = attachments.filter((a) => a.kind === 'doc');
@@ -1086,6 +1174,17 @@ ${docText}`;
 										<span class="text-base-content/50 text-[13px]">Searched: <span class="text-base-content/70 font-medium">{msg.searchQuery}</span></span>
 										{#if msg.searchResults?.length}
 											<span class="text-base-content/30 text-[13px]">· {msg.searchResults.length} results</span>
+										{/if}
+									</div>
+								</div>
+							{/if}
+							{#if msg.canvasSearchQuery}
+								<div class="flex justify-end">
+									<div class="bg-base-200 border-base-300 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5">
+										<MagnifyingGlassIcon size={11} class="text-base-content/40 shrink-0" />
+										<span class="text-base-content/50 text-[13px]">Canvas: <span class="text-base-content/70 font-medium">{msg.canvasSearchQuery}</span></span>
+										{#if msg.canvasSearchResults?.length}
+											<span class="text-base-content/30 text-[13px]">· {msg.canvasSearchResults.length} hits</span>
 										{/if}
 									</div>
 								</div>
