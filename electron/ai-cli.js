@@ -81,9 +81,9 @@ function claudeEngine({ system, model, messages }) {
 		'--include-partial-messages',
 		'--verbose',
 		'--tools', '',
-		// Plain completion backend: skip hooks/plugins/CLAUDE.md so the app's
-		// own system prompt is the only instruction source.
-		'--bare',
+		// Keep the app's system prompt the only instruction source. Note:
+		// --bare would also work here but it skips credential loading and the
+		// CLI then reports "Not logged in".
 		'--exclude-dynamic-system-prompt-sections'
 	];
 	if (system) args.push('--system-prompt', system);
