@@ -1,11 +1,9 @@
-import { canvas } from './state.svelte';
 import type { ObjectData } from './state.svelte';
 
 // ── IDB adapter (same as old StorageController) ──────────────────────────────
 
 const DB_NAME = 'muse';
 const STORE   = 'kv';
-const KEY     = 'root';
 
 let _db: IDBDatabase | null = null;
 
@@ -150,19 +148,6 @@ export function migrateOldObjects(rawObjects: Record<string, unknown>[]): Object
   return result;
 }
 
-// ── Persisted data shape ───────────────────────────────────────────────────────
-
-type PersistedData = {
-  version: number;
-  objects: Record<string, unknown>[];
-  camera?: { x: number; y: number; zoom: number };
-  folderStack?: string[];
-};
-
-// ── Save status ───────────────────────────────────────────────────────────────
-
-export const saveStatus = $state({ saving: false, savedAt: 0 });
-
 // ── Generic IDB helpers (exported for other modules) ─────────────────────────
 
 export async function idbGet<T>(key: string): Promise<T | null> {
@@ -174,54 +159,12 @@ export async function idbPut(key: string, value: unknown): Promise<void> {
   await idbSave(key, value);
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
-export async function load(): Promise<boolean> {
-  try {
-    const raw = await idbLoad(KEY);
-    if (!raw) return false;
-    const data = raw as PersistedData;
-    if (!Array.isArray(data.objects)) return false;
-
-    canvas.objects = migrateOldObjects(data.objects);
-    if (data.camera) {
-      canvas.camera = { ...data.camera };
-    }
-    if (Array.isArray(data.folderStack)) {
-      canvas.folderStack = [...data.folderStack];
-    }
-    return true;
-  } catch (err) {
-    console.error('[storage] load error', err);
-    return false;
-  }
-}
-
-export async function flush(): Promise<void> {
-  saveStatus.saving = true;
-  try {
-    const data: PersistedData = {
-      version: 2,
-      objects: $state.snapshot(canvas.objects) as unknown as Record<string, unknown>[],
-      camera:  { ...$state.snapshot(canvas.camera) },
-      folderStack: [...canvas.folderStack],
-    };
-    await idbSave(KEY, data);
-    saveStatus.savedAt = Date.now();
-  } catch (err) {
-    console.error('[storage] flush error', err);
-  } finally {
-    saveStatus.saving = false;
-  }
-}
-
-let _timer: ReturnType<typeof setTimeout> | null = null;
-const DEBOUNCE_MS = 2000;
-
-export function markDirty(): void {
-  if (_timer) clearTimeout(_timer);
-  _timer = setTimeout(() => {
-    _timer = null;
-    flush().catch(console.error);
-  }, DEBOUNCE_MS);
+export async function idbDel(key: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
 }

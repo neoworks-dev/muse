@@ -117,7 +117,7 @@ export class MediaRenderer extends BaseObjectRenderer {
     }
   }
 
-  // Resolve encrypted-media sentinels (media:{id}) via the Vault before loading.
+  // Resolve media sentinels (media:{id}) from the local blob store before loading.
   private async _loadImageSrc(data: MediaData): Promise<void> {
     if (isMediaSentinel(data.src) && data.manifest) {
       try {

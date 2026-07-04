@@ -20,7 +20,7 @@
 	import { vim } from '@replit/codemirror-vim';
 
 	import FloatingWindow from '../FloatingWindow.svelte';
-	import { saveStatus, markDirty } from '$lib/storage.svelte';
+	import { saveStatus, scheduleSync } from '$lib/sync.svelte';
 	import { loadSettings, saveSettings } from '$lib/settings';
 	import AnnotSelBar from './AnnotSelBar.svelte';
 	import AnnotTooltip from './AnnotTooltip.svelte';
@@ -151,7 +151,7 @@
 						{
 							key: 'Mod-s',
 							run: () => {
-								markDirty();
+								scheduleSync();
 								return true;
 							}
 						},

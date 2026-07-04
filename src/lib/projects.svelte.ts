@@ -1,6 +1,6 @@
-import { db } from './db';
 import { canvas } from './state.svelte';
-import { hydrate } from './sync.svelte';
+import { hydrate, flushNow, canvasKey } from './sync.svelte';
+import { idbGet, idbPut, idbDel } from './storage.svelte';
 import { createId } from './canvas/utils/ids';
 
 export interface Project {
@@ -15,8 +15,8 @@ export const projects = $state({
 	ready: false
 });
 
+const PROJECTS_KEY = 'projects';
 const ACTIVE_KEY = 'muse:active-project';
-const ADOPTED_KEY = 'muse:objects-adopted';
 
 /** The project whose objects are currently loaded into the canvas. */
 export function activeProjectId(): string | null {
@@ -28,16 +28,15 @@ export const activeProject = () => projects.list.find((p) => p.id === projects.a
 // ── Load ─────────────────────────────────────────────────────────────────────
 
 /**
- * Loads the project list, creating a default project on first run and adopting
- * any pre-projects objects into it. Picks the last-active project (or the first).
+ * Loads the project list from IndexedDB, creating a default project on first
+ * run. Picks the last-active project (or the first).
  */
 export async function loadProjects(): Promise<void> {
-	let rows = await fetchProjects();
+	let rows = (await idbGet<Project[]>(PROJECTS_KEY)) ?? [];
 
 	if (rows.length === 0) {
-		const first = await createProjectRow('My Canvas');
-		await adoptOrphanObjects(first.id);
-		rows = [first];
+		rows = [{ id: createId('project'), name: 'My Canvas' }];
+		await idbPut(PROJECTS_KEY, rows);
 	}
 
 	projects.list = rows;
@@ -48,57 +47,37 @@ export async function loadProjects(): Promise<void> {
 	projects.ready = true;
 }
 
-async function fetchProjects(): Promise<Project[]> {
-	const data = await db.query({
-		projects: { __args: { limit: 1000 }, id: true, name: true, color: true }
-	});
-	return (data.projects ?? []) as Project[];
+async function persistProjects(): Promise<void> {
+	await idbPut(PROJECTS_KEY, $state.snapshot(projects.list));
 }
 
 // ── Mutations ──────────────────────────────────────────────────────────────────
 
 export async function createProject(name: string): Promise<Project> {
-	const project = await createProjectRow(name);
+	const project: Project = { id: createId('project'), name };
 	projects.list = [...projects.list, project];
+	await persistProjects();
 	await switchProject(project.id);
 	return project;
-}
-
-async function createProjectRow(name: string, color?: string): Promise<Project> {
-	const id = createId('project');
-	const now = new Date().toISOString();
-	const input: Record<string, unknown> = { name, created_at: now, updated_at: now };
-	if (color) input.color = color;
-	await db.mutation({ createProject: { __args: { id, input: input as never }, id: true } });
-	return { id, name, color };
 }
 
 export async function renameProject(id: string, name: string): Promise<void> {
 	const project = projects.list.find((p) => p.id === id);
 	if (!project) return;
 	project.name = name;
-	await db.mutation({
-		updateProject: {
-			__args: { id, input: { name, updated_at: new Date().toISOString() } as never },
-			id: true
-		}
-	});
+	await persistProjects();
 }
 
 /**
- * Deletes a project and all of its canvas objects. Refuses to remove the last
+ * Deletes a project and its stored canvas snapshot. Refuses to remove the last
  * remaining project. Switches to another project if the active one is deleted.
  */
 export async function deleteProject(id: string): Promise<void> {
 	if (projects.list.length <= 1) return;
 
-	const objectIds = await objectIdsFor(id);
-	for (const objectId of objectIds) {
-		await db.mutation({ deleteObject: { __args: { id: objectId } } });
-	}
-	await db.mutation({ deleteProject: { __args: { id } } });
-
 	projects.list = projects.list.filter((p) => p.id !== id);
+	await persistProjects();
+	await idbDel(canvasKey(id));
 
 	if (projects.activeId === id) {
 		await switchProject(projects.list[0].id);
@@ -110,45 +89,11 @@ export async function deleteProject(id: string): Promise<void> {
 /** Activates a project and reloads the canvas with that project's objects. */
 export async function switchProject(id: string): Promise<void> {
 	if (id === projects.activeId) return;
+	// Persist the outgoing project before the canvas is replaced.
+	await flushNow();
 	projects.activeId = id;
 	if (typeof localStorage !== 'undefined') localStorage.setItem(ACTIVE_KEY, id);
 	canvas.folderStack = [];
 	canvas.selection = [];
 	await hydrate();
-}
-
-// ── Object id helpers ───────────────────────────────────────────────────────────
-
-async function objectIdsFor(projectId: string): Promise<string[]> {
-	const data = await db.query({
-		objects: { __args: { limit: 100000, filter: { project_id: projectId } as never }, id: true }
-	});
-	return ((data.objects ?? []) as { id: string }[]).map((o) => o.id);
-}
-
-/**
- * One-time migration: assigns every object that predates projects (no
- * project_id) to the default project. Guarded by a localStorage flag.
- */
-async function adoptOrphanObjects(projectId: string): Promise<void> {
-	if (typeof localStorage !== 'undefined' && localStorage.getItem(ADOPTED_KEY)) return;
-
-	const data = await db.query({
-		objects: { __args: { limit: 100000 }, id: true, project_id: true }
-	});
-	const orphans = ((data.objects ?? []) as { id: string; project_id?: string | null }[]).filter(
-		(o) => !o.project_id
-	);
-
-	const now = new Date().toISOString();
-	for (const orphan of orphans) {
-		await db.mutation({
-			updateObject: {
-				__args: { id: orphan.id, input: { project_id: projectId, updated_at: now } as never },
-				id: true
-			}
-		});
-	}
-
-	if (typeof localStorage !== 'undefined') localStorage.setItem(ADOPTED_KEY, '1');
 }
