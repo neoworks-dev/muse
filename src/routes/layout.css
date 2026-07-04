@@ -1,0 +1,229 @@
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-sans/700.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+@import '@fontsource/caveat/400.css';
+@import '@fontsource/caveat/600.css';
+@import '@fontsource/caveat/700.css';
+@import 'tailwindcss';
+/* Shared neoworks design tokens (CSS-var layer + theme-aware utilities). */
+@import '@neoworks-dev/ui/styles';
+
+/* Tailwind v4 skips node_modules — scan the ui package so utilities used inside
+   shared components (FloatingScrollbar's no-scrollbar, bg-line-strong, …) compile. */
+@source '../../../../packages/ui/src';
+@plugin '@tailwindcss/typography';
+
+/* Two daisyUI themes named to match the token layer's data-theme values, so a
+   single data-theme="dark|light" switches both daisyUI and the token vars. The
+   base scale is mapped to muse's usage (base-100 = surface/cards, not canvas). */
+@plugin 'daisyui' {
+	themes: dark --default, light;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'dark';
+	default: true;
+	color-scheme: dark;
+
+	--color-base-100: #141416; /* surface — cards, toolbar, panels */
+	--color-base-200: #1c1c1f; /* raised / hover                  */
+	--color-base-300: #262626; /* borders, dividers               */
+	--color-base-content: #fafafa;
+
+	--color-primary: #fafafa;
+	--color-primary-content: #0b0b0d;
+	--color-secondary: #1c1c1f;
+	--color-secondary-content: #a1a1aa;
+	--color-accent: #fbbf24;
+	--color-accent-content: #0b0b0d;
+	--color-neutral: #1c1c1f;
+	--color-neutral-content: #a1a1aa;
+
+	--color-info: #60a5fa;
+	--color-info-content: #0b0b0d;
+	--color-success: #4ade80;
+	--color-success-content: #0b0b0d;
+	--color-warning: #fbbf24;
+	--color-warning-content: #0b0b0d;
+	--color-error: #f87171;
+	--color-error-content: #0b0b0d;
+
+	--radius-selector: 0.375rem;
+	--radius-field: 0.375rem;
+	--radius-box: 0.75rem;
+	--size-selector: 0.21875rem;
+	--size-field: 0.21875rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'light';
+	color-scheme: light;
+
+	--color-base-100: #ffffff; /* surface — cards, toolbar, panels */
+	--color-base-200: #f4f4f5; /* raised / hover                  */
+	--color-base-300: #e4e4e7; /* borders, dividers               */
+	--color-base-content: #09090b;
+
+	--color-primary: #09090b;
+	--color-primary-content: #ffffff;
+	--color-secondary: #f4f4f5;
+	--color-secondary-content: #3f3f46;
+	--color-accent: #f59e0b;
+	--color-accent-content: #ffffff;
+	--color-neutral: #e4e4e7;
+	--color-neutral-content: #3f3f46;
+
+	--color-info: #2563eb;
+	--color-info-content: #ffffff;
+	--color-success: #16a34a;
+	--color-success-content: #ffffff;
+	--color-warning: #d97706;
+	--color-warning-content: #ffffff;
+	--color-error: #dc2626;
+	--color-error-content: #ffffff;
+
+	--radius-selector: 0.375rem;
+	--radius-field: 0.375rem;
+	--radius-box: 0.75rem;
+	--size-selector: 0.21875rem;
+	--size-field: 0.21875rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@theme {
+	/* Fonts — Geist from the design system */
+	--font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
+
+	/* App surfaces — theme-aware via the shared token vars */
+	--color-canvas: var(--bg);
+	--color-surface: var(--surface);
+	--color-surface-raised: var(--surface-raised);
+
+	/* Accent tints (canvas selection / highlights) — amber, derived from accent */
+	--color-accent-subtle: color-mix(in srgb, var(--color-accent) 14%, transparent);
+	--color-accent-selection: color-mix(in srgb, var(--color-accent) 18%, transparent);
+	--color-accent-hover: var(--primary-hover);
+
+	/* Canvas object fills — paper tones that read on either theme */
+	--color-note: #fef9c3;
+	--color-note-border: #f0e060;
+	--color-folder: #e3e6ea;
+	--color-folder-border: #cfd5db;
+
+	/* Shadows — subtle, layered */
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-faint);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border-faint);
+	--shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--border-faint);
+	--shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--border-faint);
+
+	/* Motion */
+	--ease-default: cubic-bezier(0.2, 0, 0, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Note surface — matches NoteRenderer's themed card so the inline editor blends. */
+:root,
+[data-theme='dark'] {
+	--note-card: #26282c;
+	--note-text: #dadce0;
+}
+[data-theme='light'] {
+	--note-card: #fdfcf5;
+	--note-text: #322d23;
+}
+
+/* ── Base (plain rules so they win over the shared @layer base) ── */
+html,
+body {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	font-family: var(--font-sans);
+	font-size: 16px;
+	background: var(--color-canvas);
+	color: var(--text);
+	user-select: none;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+input,
+textarea {
+	user-select: text;
+	font-family: inherit;
+}
+
+/* ── Animations ── */
+@keyframes shimmer {
+	to {
+		transform: translateX(200%);
+	}
+}
+
+/* ── CodeMirror Vim ── */
+.cm-fat-cursor {
+	background: oklch(from var(--color-primary) l c h / 45%) !important;
+}
+.cm-fat-cursor.cm-cursor-secondary {
+	background: oklch(from var(--color-primary) l c h / 25%) !important;
+}
+.cm-vim-panel {
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+/* Visual-mode selection rendered by drawSelection() */
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+	background: oklch(from var(--color-primary) l c h / 22%) !important;
+}
+
+/* CodeMirror manages its own focus affordance — suppress the global focus ring
+   (its inner band uses --bg, i.e. black, which reads as an ugly outline). */
+.cm-editor.cm-focused,
+.cm-editor .cm-content:focus,
+.cm-editor .cm-content:focus-visible {
+	box-shadow: none;
+	outline: none;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--color-base-300);
+	border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: oklch(from var(--color-base-content) l c h / 30%);
+}
+
+/* ── Custom cursor ── */
+/* When the JS overlay is active, hide every native cursor (text caret stays). */
+html.custom-cursor,
+html.custom-cursor * {
+	cursor: none !important;
+}
+
+@keyframes cursor-pop {
+	0% { transform: scale(1); }
+	45% { transform: scale(0.65); }
+	100% { transform: scale(1); }
+}
+.cursor-pop {
+	animation: cursor-pop 220ms ease-out;
+}

@@ -1,0 +1,93 @@
+{
+	"name": "muse",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"main": "electron/main.js",
+	"author": {
+		"name": "Moritz Utcke",
+		"email": "letsmoe1404@gmail.com"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"electron:dev": "NODE_ENV=development electron electron/main.js",
+		"electron:build": "vite build && electron-builder",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write .",
+		"test:e2e": "playwright install && playwright test",
+		"test": "npm run test:e2e"
+	},
+	"desktopName": "com.neoworks.muse",
+	"build": {
+		"appId": "com.neoworks.muse",
+		"productName": "Muse",
+		"files": [
+			"build/**/*",
+			"electron/**/*"
+		],
+		"linux": {
+			"syncDesktopName": true,
+			"target": [
+				"AppImage",
+				"deb"
+			],
+			"category": "Graphics",
+			"icon": "static/icon.png"
+		}
+	},
+	"devDependencies": {
+		"@eslint/compat": "^2.1.0",
+		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.60.0",
+		"@sveltejs/adapter-auto": "^7.0.1",
+		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "^2.62.0",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@tailwindcss/forms": "^0.5.11",
+		"@tailwindcss/typography": "^0.5.19",
+		"@tailwindcss/vite": "^4.3.0",
+		"@types/node": "^24.12.4",
+		"electron": "^42.3.2",
+		"electron-builder": "^26.15.0",
+		"eslint": "^10.4.1",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.19.0",
+		"globals": "^17.6.0",
+		"prettier": "^3.8.3",
+		"prettier-plugin-svelte": "^3.5.2",
+		"prettier-plugin-tailwindcss": "^0.7.4",
+		"svelte": "^5.56.1",
+		"svelte-check": "^4.5.0",
+		"tailwindcss": "^4.3.0",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.60.1",
+		"vite": "^8.0.16"
+	},
+	"dependencies": {
+		"@neoworks-dev/sdk": "workspace:*",
+		"@capacitor/android": "^8.4.0",
+		"@capacitor/cli": "^8.4.0",
+		"@capacitor/core": "^8.4.0",
+		"@codemirror/lang-markdown": "^6.5.0",
+		"@codemirror/merge": "^6.12.1",
+		"@fontsource/caveat": "^5.2.8",
+		"@fontsource/geist-mono": "^5.2.8",
+		"@fontsource/geist-sans": "^5.2.5",
+		"@lezer/highlight": "^1.2.3",
+		"@neoworks-dev/ui": "workspace:*",
+		"@replit/codemirror-vim": "^6.3.0",
+		"codemirror": "^6.0.2",
+		"daisyui": "^5.5.20",
+		"html2canvas": "^1.4.1",
+		"marked": "^18.0.4",
+		"pdfjs-dist": "^6.0.227",
+		"phosphor-svelte": "^3.1.0",
+		"pixi-filters": "^6.1.5",
+		"pixi.js": "^8.18.1"
+	}
+}

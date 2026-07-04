@@ -1,0 +1,46 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Start Vite dev server only
+    cmd: bun run dev
+
+  build:
+    desc: Build static site into build/
+    cmd: bun run build
+
+  # ── Electron (desktop) ──────────────────────────────────────────────────────
+
+  electron:dev:
+    desc: Start app in Electron with Vite hot reload
+    cmds:
+      - bun run dev &
+      - NODE_ENV=development bunx electron electron/main.js
+
+  electron:preview:
+    desc: Preview app in Electron against the live dev server (hot reload)
+    cmds:
+      - bun run dev -- --port 5174 &
+      - NODE_ENV=development bunx electron electron/main.js
+
+  electron:build:
+    desc: Package desktop app with electron-builder
+    cmds:
+      - bun run build
+      - bunx electron-builder
+
+  # ── Capacitor (mobile) ──────────────────────────────────────────────────────
+
+  android:
+    desc: Build and sync to Android
+    cmds:
+      - bun run build
+      - bunx cap sync android
+      - bunx cap open android
+
+  ios:
+    desc: Build and sync to iOS
+    cmds:
+      - bun run build
+      - bunx cap sync ios
+      - bunx cap open ios
