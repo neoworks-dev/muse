@@ -30,6 +30,11 @@
 			"build/**/*",
 			"electron/**/*"
 		],
+		"asarUnpack": [
+			"node_modules/onnxruntime-node/**",
+			"node_modules/sharp/**",
+			"node_modules/@img/**"
+		],
 		"linux": {
 			"syncDesktopName": true,
 			"target": [
@@ -78,6 +83,7 @@
 		"@fontsource/caveat": "^5.2.8",
 		"@fontsource/geist-mono": "^5.2.8",
 		"@fontsource/geist-sans": "^5.2.5",
+		"@huggingface/transformers": "^4.2.0",
 		"@lezer/highlight": "^1.2.3",
 		"@neoworks-dev/ui": "workspace:*",
 		"@replit/codemirror-vim": "^6.3.0",

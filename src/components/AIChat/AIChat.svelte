@@ -2,6 +2,7 @@
 	import { tick, onMount } from 'svelte';
 	import { marked } from 'marked';
 	import { streamCompletion } from '$lib/ai';
+	import { semanticContext } from '$lib/embeddings.svelte';
 	import { loadSettings } from '$lib/settings';
 	import { webSearch } from '$lib/api/web-search';
 	import Dropdown from '../Dropdown.svelte';
@@ -606,9 +607,16 @@ Only include canvas-actions / remember / web-search tags when genuinely needed.`
 					images: i === thread.messages.length - 1 ? m.images : undefined
 				};
 			});
+			const lastUser = [...thread.messages].reverse().find((m) => m.role === 'user');
+			let retrieved = '';
+			if (lastUser?.content) {
+				try {
+					retrieved = await semanticContext(lastUser.content);
+				} catch {}
+			}
 			for await (const chunk of streamCompletion(
 				history,
-				buildSystemPrompt(),
+				buildSystemPrompt() + retrieved,
 				_abortController.signal,
 				modelOverride || undefined
 			)) {

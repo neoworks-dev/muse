@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import fs from 'fs';
 import { registerAiCliBridge } from './ai-cli.js';
+import { registerEmbeddingsBridge } from './embeddings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = path.join(__dirname, '../build');
@@ -59,6 +60,7 @@ function loadWithRetry(win, url, attempt = 0) {
 
 app.whenReady().then(() => {
 	registerAiCliBridge();
+	registerEmbeddingsBridge();
 
 	protocol.handle('app', (request) => {
 		const { pathname } = new URL(request.url);

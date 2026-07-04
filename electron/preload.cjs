@@ -18,3 +18,12 @@ contextBridge.exposeInMainWorld('aiCli', {
 		return () => ipcRenderer.removeListener(channel, listener);
 	}
 });
+
+contextBridge.exposeInMainWorld('embeddings', {
+	embedText(texts, kind) {
+		return ipcRenderer.invoke('embeddings:text', texts, kind);
+	},
+	embedImage(dataUrls) {
+		return ipcRenderer.invoke('embeddings:image', dataUrls);
+	}
+});

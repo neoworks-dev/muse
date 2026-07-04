@@ -19,6 +19,7 @@
 	import CommandPalette from '../components/CommandPalette/CommandPalette.svelte';
 
 	import { canvas, ui, pushHistory } from '$lib/state.svelte';
+	import { startEmbeddingIndexer } from '$lib/embeddings.svelte';
 	import * as actions from '$lib/actions.svelte';
 	import { hydrate, flushNow, scheduleSync } from '$lib/sync.svelte';
 	import { loadProjects } from '$lib/projects.svelte';
@@ -55,6 +56,9 @@
 	import type { ContextMenuItem } from '$lib/canvas/core/types';
 
 	let container: HTMLDivElement;
+
+	// Keeps the Nomic embedding index in sync with canvas content.
+	startEmbeddingIndexer();
 
 	// Pegboard dot styling per theme (linear RGB 0..1).
 	const peg = $derived(

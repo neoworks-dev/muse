@@ -1,23 +1,75 @@
 # Muse — Codebase Guide
 
+## Use of the commandline
+
+You can use commands as much as you need but don't mangle them together into one huge command that nobody can read or understand. If you need to run something larger write a short but meaningful description outlining what the following command will do.
+
+## Git
+
+You're allowed to use git. Every time you make a big change, commit the current worktree if it's dirty before changing anything, then write your changes, choose a short to-the-point commit message, and push to the remote repository. If you are unsure about what to write in the commit message, ask for help. Write an explanation of the change in the body of the commit message if it is not obvious from the title. Always mention that a commit was made by you and not an actual human. In case you ever find yourself in a feature branch only commit the changes this branch was for and then merge it back into main.
+
+## Style
+
+Neoworks uses a shared design system defined in the ui package. This package also contains some predefined components that can be reused throughout the applications. When creating new components, try to reuse existing ones as much as possible, and if you need to create new ones, follow the design system guidelines.
+
+## Interruptions
+
+Sometimes you might get a new prompt in the midst of creating something, if that happens, write a quick todo list that captures the work you still have open and prioritize based on what seems most important.
+
+## Code Style
+
+When editing or generating code, prioritize readability and maintainability over cleverness.
+
+Rules:
+
+- Preserve descriptive names. Do not shorten identifiers.
+  - Good: `recordId`, `customerAccount`, `paymentMethod`
+  - Bad: `rid`, `acct`, `pm`
+
+- Use `camelCase` for variables, functions, parameters, and object fields unless the language, framework, or existing codebase requires another convention.
+- Prefer explicit control flow over shorthand.
+- Avoid `??`, ternary `?:`, and compact conditional expressions unless they clearly prevent a large amount of repetitive code without reducing readability.
+- Do not deeply nest logic.
+  - More than 2 indentation levels is too much.
+  - Use guard clauses, early returns, helper functions, or extracted validation steps instead.
+
+- Keep functions short and focused.
+  - Split large functions into smaller functions instead of writing one huge function.
+  - Each function should have one clear responsibility.
+
+- Add comments only when the code is not immediately readable when skimming.
+- Comments must be technical, concise, and useful.
+  - Good: `// Normalize external IDs before database lookup.`
+  - Bad: `// Now we loop through the items and do the thing.`
+
+- Do not add obvious comments that restate the code.
+- Prefer clearly named helper functions over long inline logic with comments.
+- Do not change behavior, public APIs, data shapes, validation rules, or side effects unless explicitly asked.
+- Match the surrounding code style when it conflicts with these rules.
+
+## Tests
+
+After having written all your changes, think about if any of these changes require writing a test, if so, create a test in the tests/ directory and run the `bun test` command to see if any of the tests are failing, if they do, investigate further, otherwise everything is fine and you're done.
+
 ## What it is
 
 Electron desktop app: infinite spatial canvas where users place notes, documents, images, PDFs, bookmarks, and drawings. An AI assistant (AIChat) lives in a floating window and can read the canvas, modify it, and help with documents.
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Framework | SvelteKit + Svelte 5 runes (`$state`, `$derived`, `$effect`) |
-| Canvas | PixiJS 8.x — GPU-accelerated 2D, no manual render loop |
-| Canvas filters | pixi-filters v6 (`DropShadowFilter`) |
-| Document editor | CodeMirror 6 + `@codemirror/lang-markdown` + `@replit/codemirror-vim` |
-| Styling | Tailwind CSS v4 + DaisyUI v5 |
-| Icons | phosphor-svelte |
-| Markdown | marked v18 |
-| AI | Direct fetch to Anthropic / OpenAI / Google APIs |
-| Storage | localStorage (settings, window positions) + IndexedDB via `idbGet`/`idbPut` (AI threads, canvas state) |
-| Runtime | Electron 42 — `webSecurity: false` so renderer can call AI APIs directly without CORS |
+| Layer           | Tech                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| Framework       | SvelteKit + Svelte 5 runes (`$state`, `$derived`, `$effect`)                                           |
+| Canvas          | PixiJS 8.x — GPU-accelerated 2D, no manual render loop                                                 |
+| Canvas filters  | pixi-filters v6 (`DropShadowFilter`)                                                                   |
+| Document editor | CodeMirror 6 + `@codemirror/lang-markdown` + `@replit/codemirror-vim`                                  |
+| Styling         | Tailwind CSS v4 + DaisyUI v5                                                                           |
+| Icons           | phosphor-svelte                                                                                        |
+| Markdown        | marked v18                                                                                             |
+| AI              | Local agent CLIs (claude / codex / opencode) spawned by Electron main, streamed over IPC               |
+| Embeddings      | Nomic text+vision ONNX via @huggingface/transformers in Electron main; vectors in IndexedDB            |
+| Storage         | localStorage (settings, window positions) + IndexedDB via `idbGet`/`idbPut` (AI threads, canvas state) |
+| Runtime         | Electron 42 — `webSecurity: false` so renderer can call AI APIs directly without CORS                  |
 
 ## Project layout
 
@@ -29,10 +81,11 @@ src/
   lib/
     state.svelte.ts       # Global reactive state: canvas, ui, history
     settings.ts           # AppSettings type + loadSettings/saveSettings (localStorage)
-    ai.ts                 # streamCompletion() — SSE streaming to all providers
+    ai.ts                 # streamCompletion()/completeText() — IPC bridge to local agent CLIs
+    embeddings.svelte.ts  # Nomic semantic index: indexer, semanticSearch, semanticContext
     storage.svelte.ts     # idbGet / idbPut wrappers + saveStatus / markDirty
     api/
-      models.ts           # fetchModels() — live model list from each provider API
+      models.ts           # fetchModels() — model lists from the local CLIs via IPC
       image-gen.ts        # DALL-E image generation
       web-search.ts       # Jina / Brave / Tavily / SearXNG
       sketch-generate.ts  # Sketch → AI analysis
@@ -76,6 +129,9 @@ src/
     CommandPalette/
 electron/
   main.js                # Electron main: frameless window, app:// protocol, webSecurity: false
+  preload.cjs            # contextBridge: window.aiCli + window.embeddings
+  ai-cli.js              # Spawns claude/codex/opencode, streams completions + lists models
+  embeddings.js          # Nomic text+vision ONNX pipelines (transformers.js, models cached in userData)
 ```
 
 ## Global state (`src/lib/state.svelte.ts`)
@@ -116,6 +172,7 @@ The single reusable window primitive. All floating UI uses it.
 **overflow:** Inner div has no `overflow-hidden` so absolute-positioned children (ModelPicker panel) bleed outside the window boundary.
 
 **storageKey naming conventions:**
+
 - Document editor: `doc:{id}:win`
 - PDF viewer: `pdf:{id}:win`
 - Bookmark: `bookmark:{url}:win`
@@ -135,6 +192,7 @@ Reads `loadSettings()` for provider/key/model. Streams SSE. Supports Anthropic, 
 ### AIChat system prompt tags
 
 The AI can embed special tags in its responses:
+
 - `<remember>…</remember>` — stored in per-session memory, injected into future system prompts
 - `<canvas-actions>[…]</canvas-actions>` — JSON array of canvas mutations, shown as "Apply" prompt to user
 - `<web-search>query</web-search>` — triggers a real web search, results fed back for a second completion pass
@@ -147,6 +205,7 @@ The AI can embed special tags in its responses:
 ## Document editor
 
 CodeMirror 6 inside a FloatingWindow. Markdown only. Features:
+
 - Annotations (highlight ranges with notes, shown as sidebar)
 - AI transforms (rewrite selection via streaming)
 - Diff view with accept/reject per chunk

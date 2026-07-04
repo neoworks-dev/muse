@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { tick, onMount } from 'svelte';
-	import { canvas, ui } from '$lib/state.svelte';
+	import { canvas, ui, type ObjectData } from '$lib/state.svelte';
 	import * as actions from '$lib/actions.svelte';
 	import { createId } from '$lib/canvas/utils/ids';
+	import { semanticSearch, type SearchHit } from '$lib/embeddings.svelte';
 	import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
 	import CursorIcon from 'phosphor-svelte/lib/CursorIcon';
 	import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
@@ -326,13 +327,117 @@
 	let query = $state('');
 	let selectedIndex = $state(0);
 
-	const filtered = $derived.by<Command[]>(() => {
+	const keywordFiltered = $derived.by<Command[]>(() => {
 		const q = query.toLowerCase().trim();
 		if (!q) return allCommands;
 		return allCommands.filter((c) => {
 			const s = [c.label, c.category, ...(c.keywords ?? [])].join(' ').toLowerCase();
 			return q.split(' ').every((w) => s.includes(w));
 		});
+	});
+
+	// ── Semantic search (Nomic embeddings) ────────────────────────────────────
+
+	let semanticHits = $state<SearchHit[]>([]);
+
+	$effect(() => {
+		const q = query.trim();
+		if (!open || q.length < 3) {
+			semanticHits = [];
+			return;
+		}
+		const timer = setTimeout(async () => {
+			try {
+				semanticHits = await semanticSearch(q, 8);
+			} catch {
+				semanticHits = [];
+			}
+		}, 250);
+		return () => clearTimeout(timer);
+	});
+
+	// Mirrors the id schemes of dynamicCommands so keyword matches dedupe
+	// semantic duplicates of the same object.
+	function objectCommand(obj: ObjectData): Command | null {
+		if (obj.type === 'document') {
+			return {
+				id: `open-doc-${obj.id}`,
+				label: `Open: ${obj.title || 'Untitled Document'}`,
+				category: 'Search',
+				Icon: FileTextIcon,
+				action: () => {
+					actions.startEditingDocument(obj.id);
+					close();
+				}
+			};
+		}
+		if (obj.type === 'folder') {
+			return {
+				id: `enter-folder-${obj.id}`,
+				label: `Enter folder: ${obj.title}`,
+				category: 'Search',
+				Icon: FolderOpenIcon,
+				action: () => {
+					while (canvas.folderStack.length > 0) actions.exitFolder();
+					actions.enterFolder(obj.id);
+					close();
+				}
+			};
+		}
+		if (obj.type === 'bookmark') {
+			return {
+				id: `open-bookmark-${obj.id}`,
+				label: `Open: ${obj.title || obj.domain || obj.url}`,
+				category: 'Search',
+				Icon: BookmarkIcon,
+				action: () => {
+					actions.startViewingBookmark(obj.id);
+					close();
+				}
+			};
+		}
+		if (obj.type === 'note') {
+			const preview = obj.body.slice(0, 50).replace(/\n/g, ' ');
+			return {
+				id: `focus-note-${obj.id}`,
+				label: `Note: ${preview}${obj.body.length > 50 ? '…' : ''}`,
+				category: 'Search',
+				Icon: NoteIcon,
+				action: () => {
+					actions.selectOne(obj.id);
+					close();
+				}
+			};
+		}
+		if (obj.type === 'media') {
+			return {
+				id: `focus-media-${obj.id}`,
+				label: `Image on canvas`,
+				category: 'Search',
+				Icon: StickerIcon,
+				action: () => {
+					actions.selectOne(obj.id);
+					close();
+				}
+			};
+		}
+		return null;
+	}
+
+	const semanticCommands = $derived.by<Command[]>(() => {
+		const cmds: Command[] = [];
+		for (const hit of semanticHits) {
+			const obj = canvas.objects.find((o) => o.id === hit.id);
+			if (!obj) continue;
+			const cmd = objectCommand(obj);
+			if (cmd) cmds.push(cmd);
+		}
+		return cmds;
+	});
+
+	const filtered = $derived.by<Command[]>(() => {
+		const seen = new Set(keywordFiltered.map((c) => c.id));
+		return [...keywordFiltered, ...semanticCommands.filter((c) => !seen.has(c.id))];
 	});
 
 	// Only reset on query change, not on dynamic command changes
